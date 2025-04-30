@@ -23,7 +23,7 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "v2f.H"
+#include "v2fBuoyant.H"
 #include "fvModels.H"
 #include "fvConstraints.H"
 #include "bound.H"
@@ -38,7 +38,7 @@ namespace RASModels
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
 template<class BasicMomentumTransportModel>
-tmp<volScalarField> v2f<BasicMomentumTransportModel>::boundEpsilon()
+tmp<volScalarField> v2fBuoyant<BasicMomentumTransportModel>::boundEpsilon()
 {
     tmp<volScalarField> tCmuk2(CmuKEps_*sqr(k_));
     epsilon_ = max(epsilon_, tCmuk2()/(this->nutMaxCoeff_*this->nu()));
@@ -47,14 +47,14 @@ tmp<volScalarField> v2f<BasicMomentumTransportModel>::boundEpsilon()
 
 
 template<class BasicMomentumTransportModel>
-tmp<volScalarField> v2f<BasicMomentumTransportModel>::Ts() const
+tmp<volScalarField> v2fBuoyant<BasicMomentumTransportModel>::Ts() const
 {
     return max(k_/epsilon_, 6.0*sqrt(this->nu()/epsilon_));
 }
 
 
 template<class BasicMomentumTransportModel>
-tmp<volScalarField> v2f<BasicMomentumTransportModel>::Ls() const
+tmp<volScalarField> v2fBuoyant<BasicMomentumTransportModel>::Ls() const
 {
     return
         CL_*max(pow(k_, 1.5)
@@ -63,7 +63,7 @@ tmp<volScalarField> v2f<BasicMomentumTransportModel>::Ls() const
 
 
 template<class BasicMomentumTransportModel>
-void v2f<BasicMomentumTransportModel>::correctNut()
+void v2fBuoyant<BasicMomentumTransportModel>::correctNut()
 {
     this->nut_ = min(boundEpsilon()/epsilon_, this->Cmu_*v2_*Ts());
     this->nut_.correctBoundaryConditions();
@@ -74,7 +74,7 @@ void v2f<BasicMomentumTransportModel>::correctNut()
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 template<class BasicMomentumTransportModel>
-v2f<BasicMomentumTransportModel>::v2f
+v2fBuoyant<BasicMomentumTransportModel>::v2fBuoyant
 (
     const alphaField& alpha,
     const rhoField& rho,
@@ -187,7 +187,28 @@ v2f<BasicMomentumTransportModel>::v2f
             1.3
         )
     ),
-
+    Cg_
+    (
+        dimensioned<scalar>::lookupOrAddToDict
+        (
+            "Cg",
+            this->coeffDict_,
+            1/0.9
+        )
+    ),
+    Cphi_
+    (
+        dimensioned<scalar>::lookupOrAddToDict
+        (
+            "Cphi",
+            this->coeffDict_,
+            0.3
+        )
+    ),
+    THFM_
+    (
+            "GGDH"
+    ),
     k_
     (
         IOobject
@@ -236,9 +257,16 @@ v2f<BasicMomentumTransportModel>::v2f
         ),
         this->mesh_
     ),
+    g_
+    (
+      this->mesh_.objectRegistry::template
+        lookupObject<uniformDimensionedVectorField>("g")
+    ),
     v2Min_(dimensionedScalar(v2_.dimensions(), small)),
     fMin_(dimensionedScalar(f_.dimensions(), 0))
 {
+    this->coeffDict().readIfPresent("THFM", THFM_);
+    Info << "  Turbulence heat flux model: " << THFM_ << nl;
     bound(k_, this->kMin_);
     boundEpsilon();
     bound(v2_, v2Min_);
@@ -254,7 +282,7 @@ v2f<BasicMomentumTransportModel>::v2f
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<class BasicMomentumTransportModel>
-bool v2f<BasicMomentumTransportModel>::read()
+bool v2fBuoyant<BasicMomentumTransportModel>::read()
 {
     if (eddyViscosity<RASModel<BasicMomentumTransportModel>>::read())
     {
@@ -268,6 +296,10 @@ bool v2f<BasicMomentumTransportModel>::read()
         Ceps3_.readIfPresent(this->coeffDict());
         sigmaK_.readIfPresent(this->coeffDict());
         sigmaEps_.readIfPresent(this->coeffDict());
+        Cg_.readIfPresent(this->coeffDict());
+        Cphi_.readIfPresent(this->coeffDict());
+
+        // Read THFM is found in coeffDict
 
         return true;
     }
@@ -279,7 +311,7 @@ bool v2f<BasicMomentumTransportModel>::read()
 
 
 template<class BasicMomentumTransportModel>
-void v2f<BasicMomentumTransportModel>::correct()
+void v2fBuoyant<BasicMomentumTransportModel>::correct()
 {
     if (!this->turbulence_)
     {
@@ -304,14 +336,23 @@ void v2f<BasicMomentumTransportModel>::correct()
 
     // Use N=6 so that f=0 at walls
     const dimensionedScalar N("N", dimless, 6.0);
+    const dimensionedScalar epsSmall("epsSmall", epsilon_.dimensions(), SMALL);
+    const dimensionedScalar k0("k0", k_.dimensions(), SMALL);
 
     const volTensorField gradU(fvc::grad(U));
     const volScalarField S2(2*magSqr(dev(symm(gradU))));
+    const volVectorField gradRho(fvc::grad(rho)/rho);
 
-    const volScalarField G(this->GName(), nut*S2);
+    Info << "  Turbulence heat flux model: " << THFM_ << nl;
+    const volScalarField Pb = THFM_ == "SGDH" ?
+      -nut*Cg_*g_ & gradRho :
+      -(3/2)*Cg_*nut/(k_ + k0)*(this->sigma() & gradRho) & g_;
+      /* (Cphi_*Cg_*(k_/(epsilon_ + epsSmall))*(g_ & (this->sigma() & gradRho))); */
+
+    const volScalarField G(this->GName(), (nut*S2 + Pb));
     const volScalarField Ts(this->Ts());
     const volScalarField L2(typedName("L2"), sqr(Ls()));
-    const volScalarField v2fAlpha
+    const volScalarField v2fBuoyantAlpha
     (
         typedName("alpha"),
         1.0/Ts*((C1_ - N)*v2_ - 2.0/3.0*k_*(C1_ - 1.0))
@@ -323,6 +364,37 @@ void v2f<BasicMomentumTransportModel>::correct()
         1.4*(1.0 + 0.05*min(sqrt(k_/v2_), scalar(100.0)))
     );
 
+    // Write Pk and Pb
+    volScalarField Pk_
+    (
+        IOobject
+        (
+            "Pk",
+            this->mesh_.time().name(),
+            this->mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        nut*S2
+    );
+    volScalarField Pb_
+    (
+        IOobject
+        (
+            "Pb",
+            this->mesh_.time().name(),
+            this->mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        Pb
+    );
+
+    if (this->mesh_.time().write())
+    {
+        Pk_.write();
+        Pb_.write();
+    }
     // Update epsilon (and possibly G) at the wall
     epsilon_.boundaryFieldRef().updateCoeffs();
 
@@ -373,7 +445,7 @@ void v2f<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(f_)
      ==
       - fvm::Sp(1.0/L2, f_)
-      - 1.0/L2/k_*(v2fAlpha - C2_*G)
+      - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*G)
     );
 
     fEqn.ref().relax();
@@ -390,7 +462,7 @@ void v2f<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, v2_)
       - fvm::laplacian(alpha*rho*DkEff(), v2_)
       ==
-        alpha*rho*min(k_*f_, C2_*G - v2fAlpha)
+        alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
       - fvm::Sp(N*alpha*rho*epsilon_/k_, v2_)
       + fvModels.source(alpha, rho, v2_)
     );
@@ -402,6 +474,8 @@ void v2f<BasicMomentumTransportModel>::correct()
     bound(v2_, v2Min_);
 
     correctNut();
+
+
 }
 
 

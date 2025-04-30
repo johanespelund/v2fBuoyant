@@ -22,7 +22,7 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::RASModels::v2f
+    Foam::RASModels::v2fBuoyant
 
 Description
     Lien and Kalitzin's v2-f turbulence model for incompressible and
@@ -63,7 +63,7 @@ Description
 
     The default model coefficients are
     \verbatim
-        v2fCoeffs
+        v2fBuoyantCoeffs
         {
             Cmu         0.22;
             CmuKEps     0.09;
@@ -92,16 +92,17 @@ See also
     Foam::fWallFunctionFvPatchScalarField
 
 SourceFiles
-    v2f.C
+    v2fBuoyant.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef v2f_H
-#define v2f_H
+#ifndef v2fBuoyant_H
+#define v2fBuoyant_H
 
 #include "v2fBase.H"
 #include "RASModel.H"
 #include "eddyViscosity.H"
+#include "uniformDimensionedFields.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -111,11 +112,11 @@ namespace RASModels
 {
 
 /*---------------------------------------------------------------------------*\
-                             Class v2f Declaration
+                             Class v2fBuoyant Declaration
 \*---------------------------------------------------------------------------*/
 
 template<class BasicMomentumTransportModel>
-class v2f
+class v2fBuoyant
 :
     public eddyViscosity<RASModel<BasicMomentumTransportModel>>,
     public v2fBase
@@ -138,6 +139,19 @@ protected:
             dimensionedScalar sigmaK_;
             dimensionedScalar sigmaEps_;
 
+        //- Gravitational acceleration vector [m/s^2]
+          const uniformDimensionedVectorField& g_;
+
+        //- Inverse turbulent Prandtl number
+          dimensionedScalar Cg_; 
+
+        //- Coefficient for the buoyancy production term in GGDH
+          dimensionedScalar Cphi_;
+
+        //- Turbulent heat flux model (THFM) type.
+          //  Eiter SGDH (simple gradient diffusion hypothesis, default) or
+          //  or GGDH (generalized gradient diffusion hypothesis).
+          word THFM_;
 
         // Fields
 
@@ -182,13 +196,13 @@ public:
 
 
     //- Runtime type information
-    TypeName("v2f");
+    TypeName("v2fBuoyant");
 
 
     // Constructors
 
         //- Construct from components
-        v2f
+        v2fBuoyant
         (
             const alphaField& alpha,
             const rhoField& rho,
@@ -201,7 +215,7 @@ public:
 
 
     //- Destructor
-    virtual ~v2f()
+    virtual ~v2fBuoyant()
     {}
 
 
@@ -277,7 +291,7 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #ifdef NoRepository
-    #include "v2f.C"
+    #include "v2fBuoyant.C"
 #endif
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
