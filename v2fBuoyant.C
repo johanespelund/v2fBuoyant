@@ -430,6 +430,7 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
      ==
         alpha*rho*nut*S2
       - alpha*rho*fvm::SuSp(-Pb/k_,k_)
+      // + alpha*rho*Pb
       - fvm::SuSp((2.0/3.0)*alpha*rho*divU, k_)
       - fvm::Sp(alpha*rho*epsilon_/k_, k_)
       + fvModels.source(alpha, rho, k_)
@@ -448,7 +449,8 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(f_)
      ==
       - fvm::Sp(1.0/L2, f_)
-      - 1.0/L2/k_*(v2fBuoyantAlpha + C2_*fvm::SuSp(-Pb/(f_ + dimensionedScalar(f_.dimensions(), SMALL)), f_))
+      // - 1.0/L2/k_*(v2fBuoyantAlpha + C2_*fvm::SuSp(-Pb/(f_ + dimensionedScalar(f_.dimensions(), SMALL)), f_))
+      // - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*Pb)
       - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*nut*S2)
     );
 
@@ -467,8 +469,10 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(alpha*rho*DkEff(), v2_)
       ==
 
-        alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
-      - alpha*rho*fvm::SuSp(-min(k_*f_, C2_*Pb - v2fBuoyantAlpha)/v2_, v2_)
+        alpha*rho*k_*f_
+      //   alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
+      + alpha*rho*min(k_*f_, C2_*Pb - v2fBuoyantAlpha)
+      // - alpha*rho*fvm::SuSp(-min(k_*f_, C2_*Pb - v2fBuoyantAlpha)/v2_, v2_)
         // alpha*rho*min(k_*f_, C2_*nut*S2 - v2fBuoyantAlpha)
       - fvm::Sp(N*alpha*rho*epsilon_/k_, v2_)
       + fvModels.source(alpha, rho, v2_)
