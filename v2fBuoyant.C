@@ -187,6 +187,11 @@ v2fBuoyant<BasicMomentumTransportModel>::v2fBuoyant
             1.3
         )
     ),
+    g_
+    (
+      this->mesh_.objectRegistry::template
+        lookupObject<uniformDimensionedVectorField>("g")
+    ),
     Cg_
     (
         dimensioned<scalar>::lookupOrAddToDict
@@ -202,7 +207,7 @@ v2fBuoyant<BasicMomentumTransportModel>::v2fBuoyant
         (
             "Cphi",
             this->coeffDict_,
-            0.3
+            (3/2)*0.22 // (3/2)*Cmu_
         )
     ),
     THFM_
@@ -256,11 +261,6 @@ v2fBuoyant<BasicMomentumTransportModel>::v2fBuoyant
             IOobject::AUTO_WRITE
         ),
         this->mesh_
-    ),
-    g_
-    (
-      this->mesh_.objectRegistry::template
-        lookupObject<uniformDimensionedVectorField>("g")
     ),
     v2Min_(dimensionedScalar(v2_.dimensions(), small)),
     fMin_(dimensionedScalar(f_.dimensions(), 0))
@@ -342,14 +342,15 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
     const volTensorField gradU(fvc::grad(U));
     const volScalarField S2(2*magSqr(dev(symm(gradU))));
     const volVectorField gradRho(fvc::grad(rho)/rho);
+    
 
     Info << "  Turbulence heat flux model: " << THFM_ << nl;
     const volScalarField Pb = THFM_ == "SGDH" ?
       -nut*Cg_*g_ & gradRho :
-      -(3/2)*Cg_*nut/(k_ + k0)*(this->sigma() & gradRho) & g_;
-      /* (Cphi_*Cg_*(k_/(epsilon_ + epsSmall))*(g_ & (this->sigma() & gradRho))); */
+      -(3/2)*Cg_*nut/(k_ + k0)*(g_ & (this->sigma() & gradRho));
+      /* -(Cphi_*Cg_*(k_/(epsilon_ + epsSmall))*(g_ & (this->sigma() & gradRho))); */
 
-    const volScalarField G(this->GName(), (nut*S2 + Pb));
+    const volScalarField G(this->GName(), nut*S2);
     const volScalarField Ts(this->Ts());
     const volScalarField L2(typedName("L2"), sqr(Ls()));
     const volScalarField v2fBuoyantAlpha
@@ -405,7 +406,8 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
      ==
-        Ceps1*alpha*rho*G/Ts
+        Ceps1*alpha*rho*nut*S2/Ts
+      - Ceps1*alpha*rho*fvm::SuSp(-Pb/epsilon_, epsilon_)/Ts
       - fvm::SuSp(((2.0/3.0)*Ceps1 + Ceps3_)*alpha*rho*divU, epsilon_)
       - fvm::Sp(Ceps2_*alpha*rho/Ts, epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
@@ -426,7 +428,8 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, k_)
       - fvm::laplacian(alpha*rho*DkEff(), k_)
      ==
-        alpha*rho*G
+        alpha*rho*nut*S2
+      - alpha*rho*fvm::SuSp(-Pb/k_,k_)
       - fvm::SuSp((2.0/3.0)*alpha*rho*divU, k_)
       - fvm::Sp(alpha*rho*epsilon_/k_, k_)
       + fvModels.source(alpha, rho, k_)
@@ -445,7 +448,8 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(f_)
      ==
       - fvm::Sp(1.0/L2, f_)
-      - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*G)
+      - 1.0/L2/k_*(v2fBuoyantAlpha + C2_*fvm::SuSp(-Pb/(f_ + dimensionedScalar(f_.dimensions(), SMALL)), f_))
+      - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*nut*S2)
     );
 
     fEqn.ref().relax();
@@ -462,7 +466,10 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, v2_)
       - fvm::laplacian(alpha*rho*DkEff(), v2_)
       ==
+
         alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
+      - alpha*rho*fvm::SuSp(-min(k_*f_, C2_*Pb - v2fBuoyantAlpha)/v2_, v2_)
+        // alpha*rho*min(k_*f_, C2_*nut*S2 - v2fBuoyantAlpha)
       - fvm::Sp(N*alpha*rho*epsilon_/k_, v2_)
       + fvModels.source(alpha, rho, v2_)
     );
