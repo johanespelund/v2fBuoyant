@@ -41,6 +41,8 @@ License
 
 
 #include "v2fBuoyant.H"
+#include "phitfBuoyant.H"
 makeRASModel(v2fBuoyant);
+makeRASModel(phitfBuoyant);
 
 // ************************************************************************* //
