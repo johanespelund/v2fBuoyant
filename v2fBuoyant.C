@@ -473,7 +473,7 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
 
         alpha*rho*k_*f_
       + alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
-      + alpha*rho*min(k_*f_, C2_*Pb - v2fBuoyantAlpha)
+      /*+ alpha*rho*min(k_*f_, C2_*Pb - v2fBuoyantAlpha)*/
       // - alpha*rho*fvm::SuSp(-min(k_*f_, C2_*Pb - v2fBuoyantAlpha)/v2_, v2_)
         // alpha*rho*min(k_*f_, C2_*nut*S2 - v2fBuoyantAlpha)
       - fvm::Sp(N*alpha*rho*epsilon_/k_, v2_)
