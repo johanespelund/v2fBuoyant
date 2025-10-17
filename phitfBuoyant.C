@@ -513,7 +513,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     );
 
     const volVectorField& wallNormal = wallDist::New(this->mesh_).n();
-    volScalarField limiter = 2 *  mag(g_ & wallNormal) / (mag(g_) * mag(wallNormal));
+    volScalarField limiter = 1 *  mag(g_ & wallNormal) / (mag(g_) * mag(wallNormal));
 
     volScalarField limiter_
     (
@@ -560,6 +560,10 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     // Update epsilon (and possibly G) at the wall
     epsilon_.boundaryFieldRef().updateCoeffs();
 
+
+    // const volScalarField posPb = volScalarField("posPb", pos0(Pb), Pb.dimensions());
+    // Info << "posPb dimnesion: " << posPb.dimensions() << endl;
+
     // Dissipation equation
     tmp<fvScalarMatrix> epsEqn
     (
@@ -568,8 +572,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
         // alpha()*rho()*Ceps1*(G() + Pb())/T_()
-        // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))*sinTheta/T_()
-        alpha()*rho()*Ceps1*(G())/T_()
+       // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))*sinTheta/T_()
+       // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))/T_()
+       alpha()*rho()*Ceps1*Pb()/T_()
+        // alpha()*rho()*Ceps1*posPb*sinTheta/T_()
+      + alpha()*rho()*Ceps1*(G())/T_()
       - fvm::SuSp
         (
             (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
@@ -617,7 +624,6 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::Sp(1.0/L2(), f_)
       - (
             (Cf1_ - 1.0)*(phit_() - 2.0/3.0)/T_()
-           // -(Cf2_*(G() + Pb()))/k_()
            -(Cf2_*(G()))/k_()
            +(Cf2_*(2.0/3.0)*divU)
            -(2.0*this->nu()*(fvc::grad(phit_) & fvc::grad(k_)))()/k_()
@@ -646,12 +652,16 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       // + alpha()*rho()*fvm::SuSp(Pb()/k_(), phit_)
       // + alpha()*rho()*(limiter - phit_())*(Pb()/k_())*phit_
       // - alpha()*rho()*Pb()/k_()*phit_
+      // - fvm::SuSp(alpha()*rho()*Pb()/k_(),phit_)
+      // - fvm::SuSp(alpha()*rho()*(limiter - phit_())*Pb()/k_()/phit_(),phit_)
+      // - fvm::SuSp(alpha()*rho()*(1 - phit_())*Pb()/k_(),phit_)
       - fvm::SuSp
         (
             alpha()*rho()*
             (
                 // (G() + Pb())/k_()
-                (G())/k_()
+                (max(Pb(),Pb()*0))/k_()
+              + (G())/k_()
               - (2.0/3.0)*divU
               - (2.0*nut*(fvc::grad(phit_) & fvc::grad(k_)))()
                 /(k_()*sigmaPhit_*phit_())
