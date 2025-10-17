@@ -574,9 +574,9 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
         // alpha()*rho()*Ceps1*(G() + Pb())/T_()
        // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))*sinTheta/T_()
        // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))/T_()
-       alpha()*rho()*Ceps1*Pb()/T_()
+       // alpha()*rho()*Ceps1*Pb()/T_()
         // alpha()*rho()*Ceps1*posPb*sinTheta/T_()
-      + alpha()*rho()*Ceps1*(G())/T_()
+        alpha()*rho()*Ceps1*(G())/T_()
       - fvm::SuSp
         (
             (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
@@ -603,6 +603,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       ==
         // alpha()*rho()*(G() + Pb())
         alpha()*rho()*(G())
+      // + alpha()*rho()*Pb())
       - alpha()*rho()*fvm::SuSp(-Pb()/k_, k_)
       - fvm::SuSp(2.0/3.0*alpha()*rho()*divU, k_)
       - fvm::Sp(alpha()*rho()*(1.0/T_()), k_)
@@ -654,13 +655,14 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       // - alpha()*rho()*Pb()/k_()*phit_
       // - fvm::SuSp(alpha()*rho()*Pb()/k_(),phit_)
       // - fvm::SuSp(alpha()*rho()*(limiter - phit_())*Pb()/k_()/phit_(),phit_)
-      // - fvm::SuSp(alpha()*rho()*(1 - phit_())*Pb()/k_(),phit_)
+      - fvm::SuSp(alpha()*rho()*(2 - phit_())*Pb()/k_(),phit_)
+      // - alpha()*rho()*Pb())
       - fvm::SuSp
         (
             alpha()*rho()*
             (
                 // (G() + Pb())/k_()
-                (max(Pb(),Pb()*0))/k_()
+                // (max(Pb(),Pb()*0))/k_()
               + (G())/k_()
               - (2.0/3.0)*divU
               - (2.0*nut*(fvc::grad(phit_) & fvc::grad(k_)))()
