@@ -661,9 +661,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
         (
             alpha()*rho()*
             (
-                // (G() + Pb())/k_()
-                // (max(Pb(),Pb()*0))/k_()
-              + (G())/k_()
+                (G())/k_()
               - (2.0/3.0)*divU
               - (2.0*nut*(fvc::grad(phit_) & fvc::grad(k_)))()
                 /(k_()*sigmaPhit_*phit_())
