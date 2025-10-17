@@ -453,7 +453,7 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       // - 1.0/L2/k_*(v2fBuoyantAlpha + C2_*fvm::SuSp(-Pb/(f_ + dimensionedScalar(f_.dimensions(), SMALL)), f_))
       // - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*Pb)
       /*- 1.0/L2/k_*(v2fBuoyantAlpha - C2_*(G+Pb))*/
-      /*- 1.0/L2/k_*(v2fBuoyantAlpha - C2_*(G))*/
+      - 1.0/L2/k_*(v2fBuoyantAlpha - C2_*(G))
     );
 
     fEqn.ref().relax();
@@ -472,7 +472,7 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       ==
 
         alpha*rho*k_*f_
-      + alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)
+      /*+ alpha*rho*min(k_*f_, C2_*G - v2fBuoyantAlpha)*/
       /*+ alpha*rho*min(k_*f_, C2_*Pb - v2fBuoyantAlpha)*/
       // - alpha*rho*fvm::SuSp(-min(k_*f_, C2_*Pb - v2fBuoyantAlpha)/v2_, v2_)
         // alpha*rho*min(k_*f_, C2_*nut*S2 - v2fBuoyantAlpha)
