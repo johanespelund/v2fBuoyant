@@ -42,7 +42,9 @@ License
 
 #include "v2fBuoyant.H"
 #include "phitfBuoyant.H"
+#include "kEpsilonEB.H"
 makeRASModel(v2fBuoyant);
 makeRASModel(phitfBuoyant);
+makeRASModel(kEpsilonEB);
 
 // ************************************************************************* //
