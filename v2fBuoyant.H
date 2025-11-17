@@ -139,6 +139,12 @@ protected:
             dimensionedScalar sigmaK_;
             dimensionedScalar sigmaEps_;
 
+        // Flags for including source term in equations
+        bool kEqnSource_;
+        bool epsEqnSource_;
+        bool v2EqnSource_;
+        bool fEqnSource_;
+
         //- Gravitational acceleration vector [m/s^2]
           const uniformDimensionedVectorField& g_;
 
