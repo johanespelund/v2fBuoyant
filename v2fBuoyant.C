@@ -470,24 +470,25 @@ void v2fBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, k_)
       - fvm::laplacian(alpha*rho*DkEff(), k_)
      ==
-     (
-      kEqnSource_ 
-      ? alpha*rho*(G + Pb)
-      : alpha*rho*G
-     )
-        /*alpha*rho*G*/
-        /*alpha*rho*G*/
-      /*+ alpha*rho*Pb*/
-      /*- alpha*rho*fvm::SuSp(-Pb/k_,k_)*/
+
+     // ALTERNATIVE 1 (explicit treatment)
+     /*(*/
+     /* kEqnSource_ */
+     /* ? alpha*rho*(G + Pb)*/
+     /* : alpha*rho*G*/
+     /*)*/
+
+        alpha*rho*G
       - fvm::SuSp((2.0/3.0)*alpha*rho*divU, k_)
       - fvm::Sp(alpha*rho*epsilon_/k_, k_)
       + fvModels.source(alpha, rho, k_)
     );
 
-    /*if (kEqnSource_)*/
-    /*{*/
-    /*  kEqn.ref() += alpha*rho*fvm::SuSp(-Pb/k_,k_);*/
-    /*}*/
+     // ALTERNATIVE 2 (semi-implicit treatment)
+    if (kEqnSource_)
+    {
+      kEqn.ref() += alpha*rho*fvm::SuSp(-Pb/k_,k_);
+    }
 
 
     kEqn.ref().relax();
