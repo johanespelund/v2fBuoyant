@@ -27,7 +27,7 @@ Class
 Description
     Lien and Kalitzin's v2-f turbulence model for incompressible and
     compressible flows, with a limit imposed on the turbulent viscosity given
-    by Davidson et al.
+    by Davidson et al., extended with buoyancy source terms.
 
     The model solves for turbulence kinetic energy k and turbulence dissipation
     rate epsilon, with additional equations for the turbulence stress normal to
@@ -49,6 +49,14 @@ Description
         v2      = 2/3 k
         f       = zero-gradient
 
+    The buoyancy production term Pb is computed using either SGDH (simple
+    gradient diffusion hypothesis) or GGDH (generalised gradient diffusion
+    hypothesis), selected via the \c THFM coefficient.
+
+    For the epsilon equation, a stratification angle factor
+    C3 = tanh(|u_parallel / u_perp|) is applied by default to the buoyancy
+    source term.  This can be disabled by setting \c tanhLimiter to \c false.
+
     References:
     \verbatim
         Lien, F. S., & Kalitzin, G. (2001).
@@ -59,6 +67,11 @@ Description
         Modifications of the v2-f model for computing the flow in a
         3D wall jet.
         Turbulence, Heat and Mass Transfer, 4, 577-584
+
+        Katsamis, C., Craft, T., Iacovides, H., & Uribe, J. C. (2022).
+        Use of 2-D and 3-D unsteady RANS in the computation of wall bounded
+        buoyant flows.
+        International Journal of Heat and Fluid Flow, 93, 108914.
     \endverbatim
 
     The default model coefficients are
@@ -75,6 +88,14 @@ Description
             Ceps3       -0.33;
             sigmaEps    1.3;
             sigmaK      1;
+            Cg          1.176;  // 1/0.85, inverse turbulent Prandtl number
+            Cphi        0.33;   // (3/2)*Cmu, used in GGDH
+            THFM        SGDH;   // SGDH or GGDH
+            kEqnSource  true;
+            epsEqnSource true;
+            v2EqnSource false;
+            fEqnSource  false;
+            tanhLimiter true;
         }
     \endverbatim
 
@@ -155,9 +176,13 @@ protected:
           dimensionedScalar Cphi_;
 
         //- Turbulent heat flux model (THFM) type.
-          //  Eiter SGDH (simple gradient diffusion hypothesis, default) or
-          //  or GGDH (generalized gradient diffusion hypothesis).
+          //  Either SGDH (simple gradient diffusion hypothesis, default) or
+          //  GGDH (generalised gradient diffusion hypothesis).
           word THFM_;
+
+        //- Apply tanh limiter (stratification angle factor C3) to the
+        //  buoyancy source in the epsilon equation
+          bool tanhLimiter_;
 
         // Fields
 
