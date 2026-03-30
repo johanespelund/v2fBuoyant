@@ -28,11 +28,11 @@ To use this RASModel, make sure that the following entry is in `system/controlDi
 ```
 libs
 (
-  "libbuoyancyTurbSourceFvModels.so"
+  "libcompressibleBuoyantMomentumTransportModels.so"
 );
 ```
 
-Then add the model to `system/fvModels`. An example with all available
+Then add the model to `constant/momentumTransport`. An example with all available
 options and their default values is shown below:
 
 ```
@@ -48,41 +48,45 @@ FoamFile
     format      ascii;
     class       dictionary;
     location    "constant";
-    object      fvModels;
+    object      momentumTransport;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-buoyancyTurbSource
+simulationType RAS;
+
+RAS
 {
-    type        buoyancyTurbSource;
 
-    // Turbulent heat flux model (THFM): SGDH or GGDH (default: SGDH)
-    //   SGDH: simple gradient diffusion hypothesis
-    //   GGDH: generalised gradient diffusion hypothesis
-    THFM        SGDH;
 
-    // Inverse turbulent Prandtl number (default: 1/0.85 ≈ 1.176)
-    Cg          1.176;
+  v2fBuoyantCoeffs
+  {
+      // Turbulent heat flux model (THFM): SGDH or GGDH (default: SGDH)
+      //   SGDH: simple gradient diffusion hypothesis
+      //   GGDH: generalised gradient diffusion hypothesis
+      THFM        SGDH;
+  
+      // Inverse turbulent Prandtl number (default: 1/0.85 ≈ 1.176)
+      Cg          1.176;
+  
+      // Coefficient for buoyancy production term in GGDH (default: 0.3)
+      Cphi        0.3;
+  
+      // Add source term to the k equation (default: true)
+      kEqnSource           true;
+  
+      // Add source term to the epsilon equation (default: true)
+      epsilonEqnSource     true;
 
-    // Coefficient for buoyancy production term in GGDH (default: 0.3)
-    Cphi        0.3;
+      // Add source term to the v2 equation
+      v2EqnSource       true;
 
-    // Add source term to the k equation (default: true)
-    k           true;
-
-    // Add source term to the epsilon equation (default: true)
-    epsilon     true;
-
-    // Add source term to the omega equation (default: false)
-    omega       false;
-
-    // Apply stratification angle factor C3 = tanh(|u_parallel/u_perp|)
-    // in the epsilon source term (default: true)
-    tanhLimiter true;
-
-    // Add source term to the v2 equation, v2-f models only
-    // (default: auto-detected; true if v2 and f fields are present)
-    // v2       true;
+      // Add source term to the f equation
+      // fEqnSource       true;
+  
+      // Apply stratification angle factor C3 = tanh(|u_parallel/u_perp|)
+      // in the epsilon source term (default: true)
+      tanhLimiter true;
+  }
 }
 
 // ************************************************************************* //
