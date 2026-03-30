@@ -57,6 +57,11 @@ simulationType RAS;
 RAS
 {
 
+  RASModel v2fBuoyant;
+
+  turbulence on;
+
+  printCoeffs on;
 
   v2fBuoyantCoeffs
   {
