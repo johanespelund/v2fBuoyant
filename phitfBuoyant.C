@@ -31,7 +31,6 @@ License
 #include "fvMatrices.H"
 #include "fvcGrad.H"
 #include "fvcLaplacian.H"
-#include "wallDist.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -39,6 +38,12 @@ namespace Foam
 {
 namespace RASModels
 {
+
+namespace
+{
+    const scalar inverseTurbulentPrandtlDefault = 1.0/0.85;
+    const scalar threeHalves = 1.5;
+}
 
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
@@ -286,7 +291,7 @@ phitfBuoyant<BasicMomentumTransportModel>::phitfBuoyant
         (
             "Cg",
             this->coeffDict_,
-            1/0.9
+            inverseTurbulentPrandtlDefault
         )
     ),
     Cphi_
@@ -298,10 +303,12 @@ phitfBuoyant<BasicMomentumTransportModel>::phitfBuoyant
             0.3
         )
     ),
-    THFM_
-    (
-            "GGDH"
-    ),
+    kEqnSource_(true),
+    epsEqnSource_(true),
+    phitEqnSource_(false),
+    fEqnSource_(false),
+    tanhLimiter_(true),
+    THFM_("SGDH"),  // Match v2fBuoyant default; user may switch to GGDH via dictionary
     k_
     (
         IOobject
@@ -376,13 +383,22 @@ phitfBuoyant<BasicMomentumTransportModel>::phitfBuoyant
     L2Min_(dimensionedScalar("L2Min", sqr(dimLength), small))
 {
     this->coeffDict().readIfPresent("THFM", THFM_);
+    this->coeffDict().readIfPresent("kEqnSource", kEqnSource_);
+    this->coeffDict().readIfPresent("epsEqnSource", epsEqnSource_);
+    this->coeffDict().readIfPresent("phitEqnSource", phitEqnSource_);
+    this->coeffDict().readIfPresent("fEqnSource", fEqnSource_);
+    this->coeffDict().readIfPresent("tanhLimiter", tanhLimiter_);
     Info << "  Turbulence heat flux model: " << THFM_ << nl;
+    Info << "  tanhLimiter: " << tanhLimiter_ << nl;
+    Info << "  Adding source term to following equations: " << nl;
+    Info << "    k: " << kEqnSource_ << nl;
+    Info << "    epsilon: " << epsEqnSource_ << nl;
+    Info << "    phit: " << phitEqnSource_ << nl;
+    Info << "    f: " << fEqnSource_ << nl;
     bound(k_, this->kMin_);
     bound(epsilon_, epsilonMin_);
     bound(phit_, phitMin_);
     bound(f_, fMin_);
-    maxMagPb_ = 0;
-
 
     if (type == typeName)
     {
@@ -406,12 +422,23 @@ bool phitfBuoyant<BasicMomentumTransportModel>::read()
         Ceta_.readIfPresent(this->coeffDict());
         Ceps2_.readIfPresent(this->coeffDict());
         Ceps3_.readIfPresent(this->coeffDict());
+        Cf1_.readIfPresent(this->coeffDict());
+        Cf2_.readIfPresent(this->coeffDict());
+        CT_.readIfPresent(this->coeffDict());
+        Ceps1a_.readIfPresent(this->coeffDict());
+        Ceps1b_.readIfPresent(this->coeffDict());
+        Ceps1c_.readIfPresent(this->coeffDict());
         sigmaK_.readIfPresent(this->coeffDict());
         sigmaEps_.readIfPresent(this->coeffDict());
+        sigmaPhit_.readIfPresent(this->coeffDict());
         Cg_.readIfPresent(this->coeffDict());
         Cphi_.readIfPresent(this->coeffDict());
-
-        // Read THFM is found in coeffDict
+        this->coeffDict().readIfPresent("THFM", THFM_);
+        this->coeffDict().readIfPresent("kEqnSource", kEqnSource_);
+        this->coeffDict().readIfPresent("epsEqnSource", epsEqnSource_);
+        this->coeffDict().readIfPresent("phitEqnSource", phitEqnSource_);
+        this->coeffDict().readIfPresent("fEqnSource", fEqnSource_);
+        this->coeffDict().readIfPresent("tanhLimiter", tanhLimiter_);
 
         return true;
     }
@@ -446,24 +473,24 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
 
     volScalarField::Internal divU(fvc::div(fvc::absolute(this->phi(), U)));
 
-    const dimensionedScalar epsSmall("epsSmall", epsilon_.dimensions(), SMALL);
     const dimensionedScalar k0("k0", k_.dimensions(), SMALL);
 
     const volVectorField gradRho(fvc::grad(rho)/rho);
 
-
-    Info << "  Turbulence heat flux model: " << THFM_ << nl;
-    volScalarField Pb = THFM_ == "SGDH" ?
-      -nut*Cg_*g_ & gradRho :
-      /* -(3/2)*Cg_*nut/(k_ + k0)*(this->sigma() & gradRho) & g_; */
-      (3/2)*Cg_*Cphi_*(k_/(epsilon_ + epsSmall))*(this->sigma() & gradRho) & g_;
-
-    scalar maxMagPbOld = maxMagPb_;
-    volScalarField magPb = mag(Pb);
-    maxMagPb_ = gMax(magPb);
-
-    Info << "old max(mag(Pb)): " << maxMagPbOld << endl;
-    Info << "new max(mag(Pb)): " << maxMagPb_ << endl;
+    const volScalarField Pb
+    (
+        IOobject
+        (
+            "Pb",
+            this->mesh_.time().name(),
+            this->mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        THFM_ == "SGDH"
+      ? -nut*Cg_*(g_ & gradRho)
+      : -threeHalves*Cg_*nut/(k_ + k0)*(g_ & (this->sigma() & gradRho))
+    );
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
     volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
@@ -480,89 +507,27 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
         Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_()))
     );
 
-    const dimensionedScalar smallnum("smallNum", U.dimensions()*g_.dimensions(), SMALL);
-    const volScalarField sinTheta = sqrt(1 - pow((U & g_)/(mag(U) * mag(g_) + smallnum),2)) * sign(U & g_);
-
-    Info << "Min/Max sinTheta: " << gMin(sinTheta) << " / " << gMax(sinTheta) << endl;
-
-
-    // Write Pk and Pb
-    volScalarField Pk_
-    (
-        IOobject
-        (
-            "Pk",
-            this->mesh_.time().name(),
-            this->mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        G
-    );
-    volScalarField Pb_
-    (
-        IOobject
-        (
-            "Pb",
-            this->mesh_.time().name(),
-            this->mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        Pb
-    );
-
-    const volVectorField& wallNormal = wallDist::New(this->mesh_).n();
-    volScalarField limiter = 1 *  mag(g_ & wallNormal) / (mag(g_) * mag(wallNormal));
-
-    volScalarField limiter_
-    (
-        IOobject
-        (
-            "wall_limiter",
-            this->mesh_.time().name(),
-            this->mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        limiter
-    );
-    // volScalarField limiter
-    // (
-    //     IOobject("limiter", this->mesh_),
-    //     2 * mag(g_ & wallNormal) / (mag(g_) * mag(wallNormal))
-    // );
-
-    // Pb *= 0;
-
+    // Write Pk (shear production) and Pb (buoyancy production) at write times
     if (this->mesh_.time().write())
     {
-        Pk_.write();
-        Pb_.write();
-        limiter_.write();
+        volScalarField
+        (
+            IOobject
+            (
+                "Pk",
+                this->mesh_.time().name(),
+                this->mesh_,
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
+            G
+        ).write();
+        Pb.write();
     }
 
-    // Print min/max of G and Pb
-    Info << "  G: min/max = "
-         << gMin(G) << " / " << gMax(G) << nl
-          << "  Pb: min/max = "
-          << gMin(Pb) << " / " << gMax(Pb) << nl;
-
-    // Print min/max of k, epsilon, v2 and f
-    Info << "  k: min/max = "
-         << gMin(k_) << " / " << gMax(k_) << nl
-          << "  epsilon: min/max = "
-          << gMin(epsilon_) << " / " << gMax(epsilon_) << nl
-          << "  phi: min/max = "
-          << gMin(phit_) << " / " << gMax(phit_) << nl
-          << "  f: min/max = "
-          << gMin(f_) << " / " << gMax(f_) << nl;
     // Update epsilon (and possibly G) at the wall
     epsilon_.boundaryFieldRef().updateCoeffs();
 
-
-    // const volScalarField posPb = volScalarField("posPb", pos0(Pb), Pb.dimensions());
-    // Info << "posPb dimnesion: " << posPb.dimensions() << endl;
 
     // Dissipation equation
     tmp<fvScalarMatrix> epsEqn
@@ -571,12 +536,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
-        // alpha()*rho()*Ceps1*(G() + Pb())/T_()
-       // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))*sinTheta/T_()
-       // alpha()*rho()*Ceps1*(max(Pb(),Pb()*0))/T_()
-       // alpha()*rho()*Ceps1*Pb()/T_()
-        // alpha()*rho()*Ceps1*posPb*sinTheta/T_()
-        alpha()*rho()*Ceps1*(G())/T_()
+         alpha()*rho()*Ceps1*(G())/T_()
       - fvm::SuSp
         (
             (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
@@ -585,6 +545,26 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::Sp(alpha()*rho()*Ceps2_/T_(), epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
     );
+
+    if (epsEqnSource_)
+    {
+        if (tanhLimiter_)
+        {
+            // Stratification angle factor C3 = tanh(|u_parallel / u_perp|)
+            const vector gHat(g_.value()/mag(g_.value()));
+            const volScalarField vComp(gHat & U);
+            const volScalarField uComp
+            (
+                mag(U - gHat*vComp)
+              + dimensionedScalar(dimVelocity, small)
+            );
+            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/T_;
+        }
+        else
+        {
+            epsEqn.ref() += alpha*rho*Ceps1*Pb/T_;
+        }
+    }
 
     epsEqn.ref().relax();
     fvConstraints.constrain(epsEqn.ref());
@@ -601,14 +581,16 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, k_)
       - fvm::laplacian(alpha*rho*DkEff(), k_)
       ==
-        // alpha()*rho()*(G() + Pb())
-        alpha()*rho()*(G())
-      // + alpha()*rho()*Pb())
-      - alpha()*rho()*fvm::SuSp(-Pb()/k_, k_)
+         alpha()*rho()*(G())
       - fvm::SuSp(2.0/3.0*alpha()*rho()*divU, k_)
       - fvm::Sp(alpha()*rho()*(1.0/T_()), k_)
       + fvModels.source(alpha, rho, k_)
     );
+
+    if (kEqnSource_)
+    {
+        kEqn.ref() += alpha*rho*fvm::SuSp(-Pb/k_, k_);
+    }
 
     kEqn.ref().relax();
     fvConstraints.constrain(kEqn.ref());
@@ -625,7 +607,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::Sp(1.0/L2(), f_)
       - (
             (Cf1_ - 1.0)*(phit_() - 2.0/3.0)/T_()
-           -(Cf2_*(G()))/k_()
+           -(
+              fEqnSource_
+            ? Cf2_*(G() + Pb())/k_()
+            : Cf2_*(G())/k_()
+            )
            +(Cf2_*(2.0/3.0)*divU)
            -(2.0*this->nu()*(fvc::grad(phit_) & fvc::grad(k_)))()/k_()
            -(this->nu()*fvc::laplacian(phit_))()
@@ -637,10 +623,8 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     fvConstraints.constrain(fEqn.ref());
     solve(fEqn);
     fvConstraints.constrain(f_);
-    /* bound(f_, fMin_); */
 
     // Turbulence stress normal to streamlines equation
-    Info << "Solving phitEqn" << endl;
     tmp<fvScalarMatrix> phitEqn
     (
         fvm::ddt(alpha, rho, phit_)
@@ -648,15 +632,6 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(alpha*rho*(this->nu() + this->nut_/sigmaPhit_), phit_)
       ==
         alpha()*rho()*f_()
-      // + alpha()*rho()*fvm::SuSp((2 - phit_())*Pb()/k_(), phit_)
-      // + alpha()*rho()*(limiter - phit_)*Pb()*phit_()/k()
-      // + alpha()*rho()*fvm::SuSp(Pb()/k_(), phit_)
-      // + alpha()*rho()*(limiter - phit_())*(Pb()/k_())*phit_
-      // - alpha()*rho()*Pb()/k_()*phit_
-      // - fvm::SuSp(alpha()*rho()*Pb()/k_(),phit_)
-      // - fvm::SuSp(alpha()*rho()*(limiter - phit_())*Pb()/k_()/phit_(),phit_)
-      - fvm::SuSp(alpha()*rho()*(2 - phit_())*Pb()/k_(),phit_)
-      // - alpha()*rho()*Pb())
       - fvm::SuSp
         (
             alpha()*rho()*
@@ -670,6 +645,12 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
         )
       + fvModels.source(alpha, rho, phit_)
     );
+
+    if (phitEqnSource_)
+    {
+        phitEqn.ref() -= fvm::SuSp(alpha*rho*(2 - phit_)*Pb/k_, phit_);
+    }
+
     phitEqn.ref().relax();
     fvConstraints.constrain(phitEqn.ref());
     solve(phitEqn);

@@ -149,7 +149,15 @@ protected:
             dimensionedScalar sigmaPhit_;
             dimensionedScalar TMin_;
 
-          scalar maxMagPb_;
+        // Flags for including source term in equations
+        bool kEqnSource_;
+        bool epsEqnSource_;
+        bool phitEqnSource_;
+        bool fEqnSource_;
+
+        //- Apply tanh limiter (stratification angle factor C3) to the
+        //  buoyancy source in the epsilon equation
+          bool tanhLimiter_;
 
         //- Gravitational acceleration vector [m/s^2]
           const uniformDimensionedVectorField& g_;
@@ -161,8 +169,8 @@ protected:
           dimensionedScalar Cphi_;
 
         //- Turbulent heat flux model (THFM) type.
-          //  Eiter SGDH (simple gradient diffusion hypothesis, default) or
-          //  or GGDH (generalized gradient diffusion hypothesis).
+          //  Either SGDH (simple gradient diffusion hypothesis, default) or
+          //  GGDH (generalized gradient diffusion hypothesis).
           word THFM_;
 
         // Fields
