@@ -39,6 +39,12 @@ namespace Foam
 namespace RASModels
 {
 
+namespace
+{
+    const scalar inverseTurbulentPrandtlDefault = 1.0/0.85;
+    const scalar threeHalves = 1.5;
+}
+
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
 template<class BasicMomentumTransportModel>
@@ -285,7 +291,7 @@ phitfBuoyant<BasicMomentumTransportModel>::phitfBuoyant
         (
             "Cg",
             this->coeffDict_,
-            1.0/0.85
+            inverseTurbulentPrandtlDefault
         )
     ),
     Cphi_
@@ -302,7 +308,7 @@ phitfBuoyant<BasicMomentumTransportModel>::phitfBuoyant
     phitEqnSource_(false),
     fEqnSource_(false),
     tanhLimiter_(true),
-    THFM_("SGDH"),
+    THFM_("SGDH"),  // Match v2fBuoyant default; user may switch to GGDH via dictionary
     k_
     (
         IOobject
@@ -483,7 +489,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
         ),
         THFM_ == "SGDH"
       ? -nut*Cg_*(g_ & gradRho)
-      : -1.5*Cg_*nut/(k_ + k0)*(g_ & (this->sigma() & gradRho))
+      : -threeHalves*Cg_*nut/(k_ + k0)*(g_ & (this->sigma() & gradRho))
     );
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
