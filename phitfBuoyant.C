@@ -494,8 +494,8 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
     const volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
-    T_ = this->Ts();
     tS.clear();
+    T_ = this->Ts();
     bound(T_, TMin_);
     const volScalarField& T = T_;
 
