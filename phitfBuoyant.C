@@ -493,11 +493,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     );
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
-    const volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
+    const volSymmTensorField& S = tS();
+    const volScalarField G(this->GName(), nut*(2.0*(dev(S) && S)));
     tS.clear();
     T_ = this->Ts();
     bound(T_, TMin_);
-    const volScalarField& T = T_;
 
     const volScalarField L2(typedName("L2"), sqr(Ls()) + L2Min_);
 
@@ -536,9 +536,9 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
-        Ceps1*alpha*rho*G/T
+        Ceps1*alpha*rho*G/T_
       - fvm::SuSp((2.0/3.0)*Ceps1*alpha*rho*divU, epsilon_)
-      - fvm::Sp(alpha*rho*Ceps2_/T, epsilon_)
+      - fvm::Sp(alpha*rho*Ceps2_/T_, epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
     );
 
@@ -554,11 +554,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
                 mag(U - gHat*vComp)
               + dimensionedScalar(dimVelocity, small)
             );
-            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/T;
+            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/T_;
         }
         else
         {
-            epsEqn.ref() += alpha*rho*Ceps1*Pb/T;
+            epsEqn.ref() += alpha*rho*Ceps1*Pb/T_;
         }
     }
 
@@ -579,7 +579,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       ==
          alpha*rho*G
       - fvm::SuSp((2.0/3.0)*alpha*rho*divU, k_)
-      - fvm::Sp(alpha*rho*(1.0/T), k_)
+      - fvm::Sp(alpha*rho*(1.0/T_), k_)
       + fvModels.source(alpha, rho, k_)
     );
 
@@ -602,7 +602,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
      ==
       - fvm::Sp(1.0/L2(), f_)
       - (
-            (Cf1_ - 1.0)*(phit_ - 2.0/3.0)/T
+            (Cf1_ - 1.0)*(phit_ - 2.0/3.0)/T_
            -(
               fEqnSource_
             ? Cf2_*(G + Pb)/k_
