@@ -504,7 +504,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     const volScalarField Ceps1
     (
         typedName("Ceps1"),
-        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_))
+        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/max(phit_, phitMin_)))
     );
 
     // Write Pk (shear production) and Pb (buoyancy production) at write times
