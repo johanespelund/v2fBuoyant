@@ -50,7 +50,7 @@ namespace
 template<class BasicMomentumTransportModel>
 void phitfBuoyant<BasicMomentumTransportModel>::correctNut()
 {
-    this->nut_ = Cmu_*phit_*k_*T_;
+    this->nut_ = Cmu_*phit_*k_*Ts();
     this->nut_.correctBoundaryConditions();
     fvConstraints::New(this->mesh_).constrain(this->nut_);
 }
@@ -471,7 +471,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
 
     eddyViscosity<RASModel<BasicMomentumTransportModel>>::correct();
 
-    volScalarField::Internal divU(fvc::div(fvc::absolute(this->phi(), U)));
+    volScalarField divU(fvc::div(fvc::absolute(this->phi(), U)));
 
     const dimensionedScalar k0("k0", k_.dimensions(), SMALL);
 
@@ -493,18 +493,19 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     );
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
-    volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
+    const volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
+    T_ = Ts();
+    const volScalarField Ts(this->Ts());
     tS.clear();
 
-    T_ = Ts();
     bound(T_, TMin_);
 
     const volScalarField L2(typedName("L2"), sqr(Ls()) + L2Min_);
 
-    const volScalarField::Internal Ceps1
+    const volScalarField Ceps1
     (
         typedName("Ceps1"),
-        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_()))
+        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_))()
     );
 
     // Write Pk (shear production) and Pb (buoyancy production) at write times
@@ -536,13 +537,9 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
-         alpha()*rho()*Ceps1*(G())/T_()
-      - fvm::SuSp
-        (
-            (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
-            epsilon_
-        )
-      - fvm::Sp(alpha()*rho()*Ceps2_/T_(), epsilon_)
+        Ceps1*alpha*rho*G/Ts
+      - fvm::SuSp(((2.0/3.0)*Ceps1)*alpha*rho*divU, epsilon_)
+      - fvm::Sp(alpha*rho*Ceps2_/Ts, epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
     );
 
@@ -558,11 +555,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
                 mag(U - gHat*vComp)
               + dimensionedScalar(dimVelocity, small)
             );
-            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/T_;
+            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/Ts;
         }
         else
         {
-            epsEqn.ref() += alpha*rho*Ceps1*Pb/T_;
+            epsEqn.ref() += alpha*rho*Ceps1*Pb/Ts;
         }
     }
 
@@ -581,9 +578,9 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, k_)
       - fvm::laplacian(alpha*rho*DkEff(), k_)
       ==
-         alpha()*rho()*(G())
-      - fvm::SuSp(2.0/3.0*alpha()*rho()*divU, k_)
-      - fvm::Sp(alpha()*rho()*(1.0/T_()), k_)
+         alpha*rho*G
+      - fvm::SuSp(2.0/3.0*alpha*rho*divU, k_)
+      - fvm::Sp(alpha*rho*(1.0/Ts), k_)
       + fvModels.source(alpha, rho, k_)
     );
 
@@ -606,16 +603,16 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
      ==
       - fvm::Sp(1.0/L2(), f_)
       - (
-            (Cf1_ - 1.0)*(phit_() - 2.0/3.0)/T_()
+            (Cf1_ - 1.0)*(phit_ - 2.0/3.0)/Ts
            -(
               fEqnSource_
-            ? Cf2_*(G() + Pb())/k_()
-            : Cf2_*(G())/k_()
+            ? Cf2_*(G + Pb)/k_
+            : Cf2_*(G)/k_
             )
            +(Cf2_*(2.0/3.0)*divU)
-           -(2.0*this->nu()*(fvc::grad(phit_) & fvc::grad(k_)))()/k_()
+           -(2.0*this->nu()*(fvc::grad(phit_) & fvc::grad(k_)))()/k_
            -(this->nu()*fvc::laplacian(phit_))()
-        )/L2()
+        )/L2
     );
 
 
@@ -631,15 +628,15 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, phit_)
       - fvm::laplacian(alpha*rho*(this->nu() + this->nut_/sigmaPhit_), phit_)
       ==
-        alpha()*rho()*f_()
+        alpha*rho*f_
       - fvm::SuSp
         (
-            alpha()*rho()*
+            alpha*rho*
             (
-                (G())/k_()
+                (G)/k_
               - (2.0/3.0)*divU
               - (2.0*nut*(fvc::grad(phit_) & fvc::grad(k_)))()
-                /(k_()*sigmaPhit_*phit_())
+                /(k_*sigmaPhit_*phit_)
             )
           , phit_
         )
