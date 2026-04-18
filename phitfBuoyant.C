@@ -504,7 +504,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     const volScalarField Ceps1
     (
         typedName("Ceps1"),
-        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_))
+        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_()))
     );
 
     // Write Pk (shear production) and Pb (buoyancy production) at write times
@@ -536,13 +536,13 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
-         alpha*rho*Ceps1*G/T_
+         alpha()*rho()*Ceps1*(G())/T_()
       - fvm::SuSp
         (
-            (2.0/3.0*Ceps1)*(alpha*rho*divU),
+            (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
             epsilon_
         )
-      - fvm::Sp(alpha*rho*Ceps2_/T_, epsilon_)
+      - fvm::Sp(alpha()*rho()*Ceps2_/T_(), epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
     );
 
