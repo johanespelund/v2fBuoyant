@@ -494,18 +494,17 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
     const volScalarField G(this->GName(), nut*(2.0*(dev(tS()) && tS())));
-    T_ = Ts();
-    const volScalarField Ts(this->Ts());
+    T_ = this->Ts();
     tS.clear();
-
     bound(T_, TMin_);
+    const volScalarField& T = T_;
 
     const volScalarField L2(typedName("L2"), sqr(Ls()) + L2Min_);
 
     const volScalarField Ceps1
     (
         typedName("Ceps1"),
-        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_))()
+        Ceps1a_*(Ceps1b_ + Ceps1c_*sqrt(1.0/phit_))
     );
 
     // Write Pk (shear production) and Pb (buoyancy production) at write times
@@ -537,9 +536,9 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       + fvm::div(alphaRhoPhi, epsilon_)
       - fvm::laplacian(alpha*rho*DepsilonEff(), epsilon_)
       ==
-        Ceps1*alpha*rho*G/Ts
-      - fvm::SuSp(((2.0/3.0)*Ceps1)*alpha*rho*divU, epsilon_)
-      - fvm::Sp(alpha*rho*Ceps2_/Ts, epsilon_)
+        Ceps1*alpha*rho*G/T
+      - fvm::SuSp((2.0/3.0)*Ceps1*alpha*rho*divU, epsilon_)
+      - fvm::Sp(alpha*rho*Ceps2_/T, epsilon_)
       + fvModels.source(alpha, rho, epsilon_)
     );
 
@@ -555,11 +554,11 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
                 mag(U - gHat*vComp)
               + dimensionedScalar(dimVelocity, small)
             );
-            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/Ts;
+            epsEqn.ref() += alpha*rho*Ceps1*tanh(mag(vComp/uComp))*Pb/T;
         }
         else
         {
-            epsEqn.ref() += alpha*rho*Ceps1*Pb/Ts;
+            epsEqn.ref() += alpha*rho*Ceps1*Pb/T;
         }
     }
 
@@ -579,8 +578,8 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
       - fvm::laplacian(alpha*rho*DkEff(), k_)
       ==
          alpha*rho*G
-      - fvm::SuSp(2.0/3.0*alpha*rho*divU, k_)
-      - fvm::Sp(alpha*rho*(1.0/Ts), k_)
+      - fvm::SuSp((2.0/3.0)*alpha*rho*divU, k_)
+      - fvm::Sp(alpha*rho*(1.0/T), k_)
       + fvModels.source(alpha, rho, k_)
     );
 
@@ -603,7 +602,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
      ==
       - fvm::Sp(1.0/L2(), f_)
       - (
-            (Cf1_ - 1.0)*(phit_ - 2.0/3.0)/Ts
+            (Cf1_ - 1.0)*(phit_ - 2.0/3.0)/T
            -(
               fEqnSource_
             ? Cf2_*(G + Pb)/k_
