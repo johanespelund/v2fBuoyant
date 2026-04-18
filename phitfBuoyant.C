@@ -539,7 +539,7 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
          alpha()*rho()*Ceps1*(G())/T_()
       - fvm::SuSp
         (
-            (2.0/3.0*Ceps1)*(alpha()*rho()*divU),
+            (2.0/3.0)*Ceps1*alpha*rho*divU,
             epsilon_
         )
       - fvm::Sp(alpha()*rho()*Ceps2_/T_(), epsilon_)
