@@ -493,10 +493,10 @@ void phitfBuoyant<BasicMomentumTransportModel>::correct()
     );
 
     tmp<volSymmTensorField> tS(symm(fvc::grad(U)));
-    const volSymmTensorField& S = tS();
-    const volScalarField G(this->GName(), nut*(2.0*(dev(S) && S)));
+    const volSymmTensorField S(tS());
     tS.clear();
-    T_ = this->Ts();
+    const volScalarField G(this->GName(), nut*(2.0*(dev(S) && S)));
+    T_ = Ts();
     bound(T_, TMin_);
 
     const volScalarField L2(typedName("L2"), sqr(Ls()) + L2Min_);
